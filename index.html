@@ -1,1 +1,640 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f2a24">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Мои заметки</title>
+<style>
+:root{--bg:#f7f7f5;--panel:#fff;--side:#1f2a24;--sideText:#cfd8d2;--sideHi:#2e3d34;--accent:#00a82d;--text:#222;--muted:#888;--border:#e4e4e0;--sel:#e8f5ec;--code:#f1f1ee}
+body.dark{--bg:#1b1d1f;--panel:#23262a;--side:#141618;--sideText:#b9c0c5;--sideHi:#2a2e33;--text:#e6e6e6;--muted:#8a9096;--border:#33373c;--sel:#203528;--code:#2c3035}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--text);background:var(--bg);font-size:14px}
+button{font:inherit;cursor:pointer}
+input,select{font:inherit;color:var(--text)}
+#app{display:grid;grid-template-columns:230px 330px 1fr;height:100vh;height:100dvh}
+/* Sidebar */
+#side{background:var(--side);color:var(--sideText);display:flex;flex-direction:column;overflow:hidden}
+#newBtn{margin:14px;padding:10px;border:0;border-radius:20px;background:var(--accent);color:#fff;font-weight:600;font-size:15px}
+#newBtn:hover{filter:brightness(1.1)}
+#sideScroll{flex:1;overflow:auto;padding-bottom:10px}
+.sh{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 4px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.6}
+.sh button{background:none;border:0;color:inherit;font-size:16px;opacity:.9;padding:0 4px}
+.si{display:flex;align-items:center;gap:8px;padding:7px 16px;cursor:pointer;user-select:none}
+.si:hover{background:var(--sideHi)}
+.si.active{background:var(--sideHi);color:#fff;box-shadow:inset 3px 0 var(--accent)}
+.si .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.si .c{font-size:12px;opacity:.55}
+.si .act{display:none;background:none;border:0;color:inherit;opacity:.6;padding:0 2px}
+.si:hover .act{display:inline}
+.si .act:hover{opacity:1}
+#sideFoot{border-top:1px solid rgba(255,255,255,.08);padding:8px 10px;display:flex;flex-wrap:wrap;gap:4px}
+#sideFoot button{background:none;border:1px solid rgba(255,255,255,.15);color:var(--sideText);border-radius:6px;padding:4px 8px;font-size:12px}
+#sideFoot button:hover{background:var(--sideHi)}
+#syncState{width:100%;font-size:11px;opacity:.75;padding:4px 2px 0;cursor:pointer}
+/* List */
+#list{background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+#listHead{padding:14px 14px 8px;border-bottom:1px solid var(--border)}
+#listTitle{font-size:20px;font-weight:600;margin:0 0 8px;display:flex;gap:8px;align-items:center}
+#listTitle #lt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#listTitle small{font-size:12px;color:var(--muted);font-weight:400}
+.mob{display:none}
+.hb{background:none;border:0;font-size:20px;color:var(--text);padding:0 4px}
+#search{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);outline:none}
+#search:focus{border-color:var(--accent)}
+#listTools{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;color:var(--muted)}
+#sort{border:0;background:none;color:var(--muted);font-size:12px}
+#emptyTrash{border:0;background:none;color:#d33;font-size:12px;display:none}
+#notes{flex:1;overflow:auto}
+.ni{padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer}
+.ni:hover{background:var(--bg)}
+.ni.active{background:var(--sel);box-shadow:inset 3px 0 var(--accent)}
+.ni .t{font-weight:600;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ni .s{color:var(--muted);font-size:13px;line-height:1.35;max-height:2.7em;overflow:hidden}
+.ni .m{font-size:11px;color:var(--muted);margin-top:6px;display:flex;gap:8px;flex-wrap:wrap}
+.ni mark{background:#ffe066;color:#000;border-radius:2px}
+.empty{padding:40px 20px;text-align:center;color:var(--muted)}
+#fab{display:none}
+/* Editor */
+#ed{display:flex;flex-direction:column;overflow:hidden;background:var(--panel)}
+#edWrap{display:flex;flex-direction:column;height:100%;overflow:hidden}
+#edBar{display:flex;align-items:center;gap:6px;padding:8px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+#nbSel{border:1px solid var(--border);border-radius:6px;padding:4px 6px;background:var(--bg);max-width:180px}
+#edBar .sp{flex:1}
+.ib{background:none;border:1px solid transparent;border-radius:6px;padding:4px 8px;color:var(--text)}
+.ib:hover{background:var(--bg);border-color:var(--border)}
+.ib.on{color:var(--accent)}
+#tb{display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+#tb button{background:none;border:0;border-radius:5px;padding:5px 8px;color:var(--text);min-width:30px}
+#tb button:hover{background:var(--bg)}
+#tb .sep{width:1px;background:var(--border);margin:4px 4px}
+#edScroll{flex:1;overflow:auto}
+#edInner{max-width:820px;margin:0 auto;padding:24px 40px 80px}
+#title{width:100%;border:0;outline:none;font-size:28px;font-weight:700;background:none;padding:0;margin-bottom:8px}
+#tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:16px}
+.tag{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:2px 4px 2px 10px;font-size:12px;display:flex;align-items:center;gap:2px}
+.tag button{border:0;background:none;color:var(--muted);padding:0 4px}
+#tagIn{border:0;outline:none;background:none;font-size:12px;min-width:120px}
+#body{outline:none;min-height:300px;line-height:1.6;font-size:15px;overflow-wrap:anywhere}
+#body:empty:before{content:"Начните писать…";color:var(--muted)}
+#body h1{font-size:24px;margin:18px 0 8px}#body h2{font-size:20px;margin:16px 0 6px}#body h3{font-size:17px;margin:14px 0 6px}
+#body blockquote{border-left:3px solid var(--accent);margin:8px 0;padding:2px 14px;color:var(--muted)}
+#body pre{background:var(--code);padding:10px 12px;border-radius:6px;font-family:Consolas,monospace;font-size:13px;white-space:pre-wrap}
+#body img{max-width:100%;border-radius:4px}
+#body a{color:var(--accent)}
+#body table{border-collapse:collapse}#body td,#body th{border:1px solid var(--border);padding:4px 8px}
+#body ul.checklist{list-style:none;padding-left:4px}
+#body ul.checklist li{position:relative;padding-left:28px}
+#body ul.checklist li:before{content:"";position:absolute;left:0;top:4px;width:15px;height:15px;border:2px solid var(--muted);border-radius:4px;cursor:pointer}
+#body ul.checklist li.done{text-decoration:line-through;color:var(--muted)}
+#body ul.checklist li.done:before{background:var(--accent);border-color:var(--accent)}
+#body ul.checklist li.done:after{content:"✓";position:absolute;left:3px;top:0;color:#fff;font-size:13px;font-weight:700}
+#edFoot{font-size:11px;color:var(--muted);padding:6px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:10px}
+#noNote{flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);flex-direction:column;gap:10px}
+.trashBanner{background:#fff3cd;color:#664d03;padding:8px 16px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.trashBanner button{border:1px solid #c9a227;background:#fff;border-radius:5px;padding:3px 10px}
+.hidden{display:none!important}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:6px;opacity:0;transition:.3s;pointer-events:none;z-index:20;max-width:90vw}
+#toast.show{opacity:.95}
+/* Modal */
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:10;padding:16px}
+#modal .box{background:var(--panel);border-radius:12px;padding:20px 22px;max-width:520px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+#modal h3{margin:0 0 12px}
+#modal ol{padding-left:20px;line-height:1.55;margin:8px 0 14px}
+#modal code{background:var(--code);padding:1px 5px;border-radius:4px;word-break:break-all}
+#modal input{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);margin:4px 0 10px}
+#modal .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.btn{border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:8px;padding:7px 14px}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.warn{color:#d33}
+/* Mobile: one pane at a time */
+@media (max-width:760px){
+  #app{grid-template-columns:1fr}
+  body:not(.p-side) #side,body:not(.p-list) #list,body:not(.p-ed) #ed{display:none}
+  .mob{display:inline-block}
+  #fab{display:block;position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;border:0;background:var(--accent);color:#fff;font-size:28px;box-shadow:0 4px 14px rgba(0,0,0,.3);z-index:5}
+  body:not(.p-list) #fab{display:none}
+  #edInner{padding:14px 16px 80px}
+  #title{font-size:22px}
+  #edBar{padding:6px 8px}
+  #tb{padding:4px 6px;flex-wrap:nowrap;overflow-x:auto}
+  #tb button{min-width:36px;padding:7px 8px}
+  .ni{padding:14px}
+  .si{padding:11px 16px}
+  .si .act{display:inline}
+  #dates{display:none}
+}
+@media print{#side,#list,#edBar,#tb,#edFoot,#tags,#fab{display:none!important}#app{display:block}#edScroll{overflow:visible}}
+</style>
+</head>
+<body class="p-list">
+<div id="app">
+  <aside id="side">
+    <button id="newBtn" title="Ctrl+Alt+N">＋ Новая заметка</button>
+    <div id="sideScroll">
+      <div class="si" data-view="all"><span>📄</span><span class="n">Все заметки</span><span class="c" id="cAll"></span></div>
+      <div class="si" data-view="pinned"><span>⭐</span><span class="n">Избранное</span><span class="c" id="cPin"></span></div>
+      <div class="sh"><span>Блокноты</span><button id="addNb" title="Новый блокнот">＋</button></div>
+      <div id="nbList"></div>
+      <div class="sh"><span>Теги</span></div>
+      <div id="tagList"></div>
+      <div class="sh"><span></span></div>
+      <div class="si" data-view="trash"><span>🗑️</span><span class="n">Корзина</span><span class="c" id="cTrash"></span></div>
+    </div>
+    <div id="sideFoot">
+      <button id="dbxBtn" title="Синхронизация через Dropbox">☁ Dropbox</button>
+      <button id="exportAll" title="Сохранить все заметки в JSON-файл">⬇ Экспорт</button>
+      <button id="importAll" title="Загрузить заметки из JSON-файла">⬆ Импорт</button>
+      <button id="theme" title="Тёмная/светлая тема">🌓</button>
+      <button id="installBtn" class="hidden" title="Установить как приложение">📲 Установить</button>
+      <div id="syncState"></div>
+      <input type="file" id="importFile" accept=".json,application/json" class="hidden">
+    </div>
+  </aside>
+
+  <section id="list">
+    <div id="listHead">
+      <div id="listTitle"><button class="hb mob" id="toSide" title="Меню">☰</button><span id="lt">Все заметки</span><small id="lc"></small><button class="hb" id="syncIcon" title="Синхронизировать">⟳</button></div>
+      <input id="search" type="search" placeholder="Поиск…  можно #тег" autocomplete="off">
+      <div id="listTools">
+        <select id="sort">
+          <option value="updated">По дате изменения</option>
+          <option value="created">По дате создания</option>
+          <option value="title">По названию</option>
+        </select>
+        <button id="emptyTrash">Очистить корзину</button>
+      </div>
+    </div>
+    <div id="notes"></div>
+  </section>
+
+  <main id="ed">
+    <div id="noNote"><div style="font-size:48px">📝</div><div>Выберите заметку или создайте новую</div></div>
+    <div id="edWrap" class="hidden">
+      <div id="trashBanner" class="trashBanner hidden">Заметка в корзине.
+        <button id="restore">Восстановить</button><button id="delForever">Удалить навсегда</button></div>
+      <div id="edBar">
+        <button class="ib mob" id="backBtn" title="Назад">←</button>
+        <span>📒</span><select id="nbSel"></select>
+        <span class="sp"></span>
+        <button class="ib" id="pinBtn" title="В избранное">☆</button>
+        <button class="ib" id="dupBtn" title="Дублировать">⧉</button>
+        <button class="ib" id="exportNote" title="Сохранить заметку как HTML">⬇HTML</button>
+        <button class="ib" id="exportMd" title="Сохранить заметку как Markdown">⬇MD</button>
+        <button class="ib" id="printBtn" title="Печать / PDF">🖨</button>
+        <button class="ib" id="trashBtn" title="В корзину">🗑</button>
+      </div>
+      <div id="tb">
+        <button data-cmd="bold" title="Жирный (Ctrl+B)"><b>Ж</b></button>
+        <button data-cmd="italic" title="Курсив (Ctrl+I)"><i>К</i></button>
+        <button data-cmd="underline" title="Подчёркнутый (Ctrl+U)"><u>Ч</u></button>
+        <button data-cmd="strikeThrough" title="Зачёркнутый"><s>З</s></button>
+        <button data-cmd="hiliteColor" title="Выделить маркером" style="background:#ffe066;color:#000">М</button>
+        <span class="sep"></span>
+        <button data-block="H1" title="Заголовок 1">H1</button>
+        <button data-block="H2" title="Заголовок 2">H2</button>
+        <button data-block="H3" title="Заголовок 3">H3</button>
+        <button data-block="P" title="Обычный текст">¶</button>
+        <span class="sep"></span>
+        <button data-cmd="insertUnorderedList" title="Маркированный список">•≡</button>
+        <button data-cmd="insertOrderedList" title="Нумерованный список">1≡</button>
+        <button id="checkBtn" title="Список задач (Ctrl+Shift+C)">☑</button>
+        <span class="sep"></span>
+        <button data-block="BLOCKQUOTE" title="Цитата">❝</button>
+        <button data-block="PRE" title="Код">&lt;/&gt;</button>
+        <button id="linkBtn" title="Ссылка (Ctrl+K)">🔗</button>
+        <button id="imgBtn" title="Вставить картинку">🖼</button>
+        <button id="tableBtn" title="Таблица">▦</button>
+        <button data-cmd="insertHorizontalRule" title="Разделитель">―</button>
+        <span class="sep"></span>
+        <button data-cmd="undo" title="Отменить (Ctrl+Z)">↶</button>
+        <button data-cmd="redo" title="Повторить (Ctrl+Y)">↷</button>
+        <button data-cmd="removeFormat" title="Убрать форматирование">⌫</button>
+        <input type="file" id="imgFile" accept="image/*" class="hidden" multiple>
+      </div>
+      <div id="edScroll"><div id="edInner">
+        <input id="title" placeholder="Заголовок" autocomplete="off">
+        <div id="tags"><input id="tagIn" placeholder="＋ тег (Enter)"></div>
+        <div id="body" contenteditable="true" spellcheck="true"></div>
+      </div></div>
+      <div id="edFoot"><span id="dates"></span><span id="saveState"></span></div>
+    </div>
+  </main>
+</div>
+<button id="fab" title="Новая заметка">＋</button>
+
+<div id="modal" class="hidden"><div class="box">
+  <h3>☁ Синхронизация через Dropbox</h3>
+  <div id="dbxOff">
+    <div>Нужен один раз: создать «ключ приложения» в вашем Dropbox (2 минуты).</div>
+    <ol>
+      <li>Откройте <a href="https://www.dropbox.com/developers/apps/create" target="_blank" rel="noopener">dropbox.com/developers/apps/create</a></li>
+      <li>Выберите <b>Scoped access</b> → <b>App folder</b>, придумайте имя (например, <i>my-notes-sync</i>) → Create app.</li>
+      <li>Вкладка <b>Permissions</b>: отметьте <code>files.content.write</code> и <code>files.content.read</code> → Submit.</li>
+      <li>Вкладка <b>Settings</b> → OAuth 2 → <b>Redirect URIs</b>: добавьте адрес<br><code id="redir"></code> <button class="btn" id="copyRedir" style="padding:2px 8px">копировать</button></li>
+      <li>Там же убедитесь, что <b>Allow public clients (Implicit Grant &amp; PKCE)</b> = Allow.</li>
+      <li>Скопируйте <b>App key</b> со страницы Settings и вставьте сюда:</li>
+    </ol>
+    <input id="dbxKey" placeholder="App key, например abc123xyz456" autocomplete="off" spellcheck="false">
+    <div style="font-size:12px;color:var(--muted)">На каждом устройстве вводите тот же App key. Заметки будут лежать в Dropbox в папке <i>Приложения/имя-приложения/notes.json</i>.</div>
+    <div class="row"><button class="btn pri" id="dbxConnect">Подключить Dropbox</button><button class="btn" data-close>Закрыть</button></div>
+  </div>
+  <div id="dbxOn" class="hidden">
+    <div>✅ Dropbox подключён. Синхронизация идёт автоматически: при изменениях, раз в минуту и при возвращении в приложение.</div>
+    <div style="margin-top:8px;font-size:13px;color:var(--muted)" id="lastSync"></div>
+    <div class="row"><button class="btn pri" id="syncNow">⟳ Синхронизировать сейчас</button><button class="btn warn" id="dbxDisconnect">Отключить</button><button class="btn" data-close>Закрыть</button></div>
+  </div>
+</div></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const $=s=>document.querySelector(s);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=t=>new Date(t).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+const fmtShort=t=>{const d=new Date(t),n=new Date();return d.toDateString()===n.toDateString()?d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):d.toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:d.getFullYear()===n.getFullYear()?undefined:'numeric'})};
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2600)}
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}
+const isMobile=()=>matchMedia('(max-width:760px)').matches;
+function pane(p){document.body.classList.remove('p-side','p-list','p-ed');document.body.classList.add('p-'+p)}
+
+/* ---------- IndexedDB ---------- */
+let db;
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('my-notes-app',1);
+  r.onupgradeneeded=()=>{const d=r.result;['notes','notebooks'].forEach(s=>{if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:'id'})});if(!d.objectStoreNames.contains('meta'))d.createObjectStore('meta')};
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+const store=(s,m='readonly')=>db.transaction(s,m).objectStore(s);
+const req=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+const getAll=s=>req(store(s).getAll());
+const put=(s,v,k)=>req(k===undefined?store(s,'readwrite').put(v):store(s,'readwrite').put(v,k));
+const getMeta=k=>req(store('meta').get(k));
+const setMeta=(k,v)=>put('meta',v,k);
+const delMeta=k=>req(store('meta','readwrite').delete(k));
+
+/* ---------- State ----------
+   Удалённые навсегда заметки/блокноты хранятся как «надгробия» {id, deleted:true, updated},
+   чтобы удаление тоже синхронизировалось между устройствами. */
+let notes=[],notebooks=[],view={type:'all'},currentId=null,query='',sortBy=lsGet('sort')||'updated';
+const liveNotes=()=>notes.filter(n=>!n.deleted);
+const liveNbs=()=>notebooks.filter(b=>!b.deleted);
+const cur=()=>notes.find(n=>n.id===currentId&&!n.deleted);
+const nbName=id=>(notebooks.find(b=>b.id===id)||{}).name||'—';
+
+async function init(){
+  if(lsGet('theme')==='dark')document.body.classList.add('dark');
+  $('#sort').value=sortBy;
+  db=await openDB();
+  notes=await getAll('notes');notebooks=await getAll('notebooks');
+  const authResult=await handleDropboxRedirect();
+  if(!notebooks.length&&!(await isDbxConnected())){
+    // фиксированные id: на разных устройствах эти записи сольются, а не задвоятся
+    const nb={id:'default-nb',name:'Мои заметки',created:1,updated:1};notebooks.push(nb);await put('notebooks',nb);
+    if(!notes.length){
+      const n=newNoteObj(nb.id);n.id='welcome';n.created=n.updated=1;n.title='Добро пожаловать 👋';n.tags=['справка'];
+      n.html='<p>Это ваше личное приложение для заметок. Работает без интернета, а при подключённом Dropbox синхронизируется между Android, Windows и macOS.</p><h2>Что умеет</h2><ul class="checklist"><li class="done">Блокноты, теги, избранное, корзина</li><li class="done">Форматирование, списки задач, таблицы, картинки (Ctrl+V или перетаскиванием)</li><li class="done">Поиск по всем заметкам, по тегу: <code>#тег</code></li><li>Подключите Dropbox: кнопка «☁ Dropbox» в меню слева</li><li>Установите как приложение: в Chrome/Edge — значок установки в адресной строке, на Android — меню ⋮ → «Установить приложение»</li></ul><h2>Горячие клавиши</h2><p>Ctrl+Alt+N — новая заметка · Ctrl+F — поиск · Ctrl+K — ссылка · Ctrl+Shift+C — список задач · Ctrl+клик — открыть ссылку</p>';
+      n.text=htmlToText(n.html);notes.push(n);await put('notes',n);
+    }
+  }
+  await ensureNotebook();
+  renderAll();
+  if(!isMobile()){const first=visibleNotes()[0];if(first)openNote(first.id)}
+  updateSyncUI();
+  if(authResult==='ok'){toast('Dropbox подключён, синхронизирую…')}
+  sync();
+  setInterval(()=>sync(),60000);
+}
+async function ensureNotebook(){if(!liveNbs().length){const nb={id:notebooks.some(b=>b.id==='default-nb')?uid():'default-nb',name:'Мои заметки',created:Date.now(),updated:Date.now()};notebooks.push(nb);await put('notebooks',nb)}}
+function newNoteObj(nbId){const t=Date.now();return{id:uid(),title:'',html:'',text:'',notebookId:nbId,tags:[],pinned:false,trashed:false,created:t,updated:t}}
+function htmlToText(h){const d=document.createElement('div');d.innerHTML=h;return d.textContent.replace(/\s+/g,' ').trim()}
+
+/* ---------- Filtering ---------- */
+function visibleNotes(){
+  let arr=liveNotes().filter(n=>view.type==='trash'?n.trashed:!n.trashed);
+  if(view.type==='pinned')arr=arr.filter(n=>n.pinned);
+  if(view.type==='notebook')arr=arr.filter(n=>n.notebookId===view.id);
+  if(view.type==='tag')arr=arr.filter(n=>n.tags.includes(view.id));
+  const q=query.trim().toLowerCase();
+  if(q){const words=q.split(/\s+/);arr=arr.filter(n=>words.every(w=>w.startsWith('#')&&w.length>1?n.tags.some(t=>t.toLowerCase().includes(w.slice(1))):(n.title+' '+n.text+' '+n.tags.join(' ')).toLowerCase().includes(w)))}
+  const s={updated:(a,b)=>b.updated-a.updated,created:(a,b)=>b.created-a.created,title:(a,b)=>(a.title||'').localeCompare(b.title||'','ru')}[sortBy];
+  return arr.sort((a,b)=>(view.type!=='trash'&&b.pinned-a.pinned)||s(a,b));
+}
+
+/* ---------- Render ---------- */
+function renderAll(){renderSide();renderList();renderEditorMeta()}
+function renderSide(){
+  const live=liveNotes().filter(n=>!n.trashed);
+  $('#cAll').textContent=live.length;$('#cPin').textContent=live.filter(n=>n.pinned).length||'';$('#cTrash').textContent=liveNotes().filter(n=>n.trashed).length||'';
+  $('#nbList').innerHTML=liveNbs().sort((a,b)=>a.name.localeCompare(b.name,'ru')).map(b=>`<div class="si" data-view="notebook" data-id="${b.id}"><span>📒</span><span class="n">${esc(b.name)}</span><button class="act" data-ren="${b.id}" title="Переименовать">✎</button><button class="act" data-delnb="${b.id}" title="Удалить блокнот">✕</button><span class="c">${live.filter(n=>n.notebookId===b.id).length}</span></div>`).join('');
+  const tc={};live.forEach(n=>n.tags.forEach(t=>tc[t]=(tc[t]||0)+1));
+  $('#tagList').innerHTML=Object.keys(tc).sort((a,b)=>a.localeCompare(b,'ru')).map(t=>`<div class="si" data-view="tag" data-id="${esc(t)}"><span>#</span><span class="n">${esc(t)}</span><span class="c">${tc[t]}</span></div>`).join('')||'<div style="padding:4px 16px;font-size:12px;opacity:.5">Пока нет тегов</div>';
+  document.querySelectorAll('#side .si').forEach(el=>el.classList.toggle('active',el.dataset.view===view.type&&(el.dataset.id||undefined)===view.id));
+}
+function hl(s,q){s=esc(s);if(!q)return s;q.split(/\s+/).filter(w=>w&&!w.startsWith('#')).forEach(w=>{s=s.replace(new RegExp('('+esc(w).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark>$1</mark>')});return s}
+function snippet(n,q){const t=n.text||'';const w=q.split(/\s+/).find(x=>x&&!x.startsWith('#'));if(w){const i=t.toLowerCase().indexOf(w.toLowerCase());if(i>40)return '…'+t.slice(i-30,i+150)}return t.slice(0,180)}
+function renderList(){
+  const titles={all:'Все заметки',pinned:'Избранное',trash:'Корзина'};
+  $('#lt').textContent=view.type==='notebook'?nbName(view.id):view.type==='tag'?'#'+view.id:titles[view.type];
+  const arr=visibleNotes();$('#lc').textContent=arr.length;
+  $('#emptyTrash').style.display=view.type==='trash'&&arr.length?'inline':'none';
+  const q=query.trim();
+  $('#notes').innerHTML=arr.length?arr.map(n=>`<div class="ni${n.id===currentId?' active':''}" data-id="${n.id}"><div class="t">${n.pinned?'⭐ ':''}${hl(n.title||'Без названия',q)}</div><div class="s">${hl(snippet(n,q),q)||'<i>Пусто</i>'}</div><div class="m"><span>${fmtShort(n.updated)}</span><span>📒 ${esc(nbName(n.notebookId))}</span>${n.tags.map(t=>'<span>#'+esc(t)+'</span>').join('')}</div></div>`).join(''):`<div class="empty">${q?'Ничего не найдено':view.type==='trash'?'Корзина пуста':'Здесь пока нет заметок'}</div>`;
+}
+function renderEditorMeta(){
+  const n=cur();
+  $('#noNote').classList.toggle('hidden',!!n);$('#edWrap').classList.toggle('hidden',!n);
+  if(!n)return;
+  $('#nbSel').innerHTML=liveNbs().map(b=>`<option value="${b.id}"${b.id===n.notebookId?' selected':''}>${esc(b.name)}</option>`).join('');
+  $('#pinBtn').textContent=n.pinned?'★':'☆';$('#pinBtn').classList.toggle('on',n.pinned);
+  $('#trashBanner').classList.toggle('hidden',!n.trashed);
+  $('#body').contentEditable=!n.trashed;$('#title').readOnly=n.trashed;
+  $('#tags').querySelectorAll('.tag').forEach(e=>e.remove());
+  n.tags.forEach(t=>{const s=document.createElement('span');s.className='tag';s.innerHTML=`#${esc(t)}<button data-rmtag="${esc(t)}" title="Убрать">×</button>`;$('#tags').insertBefore(s,$('#tagIn'))});
+  $('#dates').textContent=`Создано: ${fmt(n.created)} · Изменено: ${fmt(n.updated)} · Слов: ${(n.text.match(/\S+/g)||[]).length}`;
+}
+function loadEditor(){const n=cur();if(n){$('#title').value=n.title;$('#body').innerHTML=n.html}}
+function openNote(id){
+  flushSave();currentId=id;
+  if(cur()){loadEditor();$('#edScroll').scrollTop=0}
+  renderList();renderEditorMeta();
+}
+
+/* ---------- Saving ---------- */
+let saveTimer=null;
+function markDirty(){$('#saveState').textContent='Сохранение…';clearTimeout(saveTimer);saveTimer=setTimeout(flushSave,400)}
+async function flushSave(){
+  if(!saveTimer)return;clearTimeout(saveTimer);saveTimer=null;
+  const n=cur();if(!n)return;
+  n.title=$('#title').value;n.html=$('#body').innerHTML;n.text=htmlToText(n.html);n.updated=Date.now();
+  await saveNote(n);$('#saveState').textContent='Сохранено ✓';renderList();renderEditorMeta();
+}
+async function saveNote(n){await put('notes',n);scheduleSync()}
+async function saveNb(b){b.updated=Date.now();await put('notebooks',b);scheduleSync()}
+
+/* ---------- Actions ---------- */
+async function createNote(){
+  flushSave();await ensureNotebook();
+  if(view.type==='trash')setView({type:'all'});
+  const nbId=view.type==='notebook'?view.id:(cur()&&!cur().trashed?cur().notebookId:liveNbs()[0].id);
+  const n=newNoteObj(nbId);if(view.type==='tag')n.tags=[view.id];if(view.type==='pinned')n.pinned=true;
+  notes.push(n);await saveNote(n);query='';$('#search').value='';
+  renderSide();openNote(n.id);pane('ed');$('#title').focus();
+}
+function setView(v){flushSave();view=v;renderSide();renderList();const a=visibleNotes();if(!a.find(n=>n.id===currentId)){openNote(isMobile()?null:(a[0]?a[0].id:null))}}
+async function addNotebook(){const name=prompt('Название нового блокнота:');if(!name||!name.trim())return;const b={id:uid(),name:name.trim(),created:Date.now()};notebooks.push(b);await saveNb(b);setView({type:'notebook',id:b.id});pane('list')}
+async function renameNotebook(id){const b=notebooks.find(x=>x.id===id);const name=prompt('Новое название:',b.name);if(!name||!name.trim())return;b.name=name.trim();await saveNb(b);renderAll()}
+async function deleteNotebook(id){
+  if(liveNbs().length<=1){toast('Нельзя удалить последний блокнот');return}
+  const cnt=liveNotes().filter(n=>n.notebookId===id&&!n.trashed).length;
+  if(!confirm(`Удалить блокнот «${nbName(id)}»?`+(cnt?`\n${cnt} заметок будут перемещены в корзину.`:'')))return;
+  const fallback=liveNbs().find(b=>b.id!==id).id;
+  for(const n of liveNotes().filter(n=>n.notebookId===id)){n.notebookId=fallback;n.trashed=true;n.updated=Date.now();await put('notes',n)}
+  const b=notebooks.find(x=>x.id===id);b.deleted=true;await saveNb(b);
+  if(view.type==='notebook'&&view.id===id)setView({type:'all'});else renderAll();
+}
+async function toTrash(){const n=cur();if(!n)return;flushSave();n.trashed=true;n.updated=Date.now();await saveNote(n);toast('Перемещено в корзину');afterRemove()}
+function afterRemove(){const a=visibleNotes();renderSide();openNote(isMobile()?null:(a[0]?a[0].id:null));if(isMobile())pane('list')}
+async function restore(){const n=cur();n.trashed=false;n.updated=Date.now();if(!liveNbs().find(b=>b.id===n.notebookId))n.notebookId=liveNbs()[0].id;await saveNote(n);toast('Восстановлено');afterRemove()}
+async function deleteForever(id){const n=notes.find(x=>x.id===id);if(!n)return;for(const k of Object.keys(n))if(k!=='id')delete n[k];n.deleted=true;n.updated=Date.now();await saveNote(n)}
+function download(name,data,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),3000)}
+const safeName=s=>(s||'Без названия').replace(/[\\/:*?"<>|]+/g,'_').slice(0,80);
+const allData=()=>({app:'my-notes',version:2,exported:new Date().toISOString(),notebooks,notes});
+function toMarkdown(html){
+  const d=document.createElement('div');d.innerHTML=html;
+  const walk=el=>[...el.childNodes].map(nd=>{
+    if(nd.nodeType===3)return nd.textContent;if(nd.nodeType!==1)return'';
+    const t=nd.tagName,inner=()=>walk(nd);
+    switch(t){case'H1':return'\n# '+inner()+'\n';case'H2':return'\n## '+inner()+'\n';case'H3':return'\n### '+inner()+'\n';
+      case'B':case'STRONG':return'**'+inner()+'**';case'I':case'EM':return'*'+inner()+'*';case'S':case'STRIKE':case'DEL':return'~~'+inner()+'~~';
+      case'CODE':return'`'+nd.textContent+'`';case'PRE':return'\n```\n'+nd.textContent+'\n```\n';
+      case'A':return'['+inner()+']('+nd.getAttribute('href')+')';case'IMG':return'![]('+(nd.src.startsWith('data:')?'встроенное-изображение':nd.src)+')';
+      case'BR':return'\n';case'HR':return'\n---\n';case'BLOCKQUOTE':return'\n> '+inner().trim().replace(/\n/g,'\n> ')+'\n';
+      case'UL':case'OL':return'\n'+[...nd.children].map((li,i)=>(nd.classList.contains('checklist')?(li.classList.contains('done')?'- [x] ':'- [ ] '):t==='OL'?(i+1)+'. ':'- ')+walk(li).trim()).join('\n')+'\n';
+      case'TR':return'| '+[...nd.children].map(c=>walk(c).trim()).join(' | ')+' |\n';
+      case'P':case'DIV':return'\n'+inner()+'\n';default:return inner()}}).join('');
+  return walk(d).replace(/\n{3,}/g,'\n\n').trim()+'\n';
+}
+
+/* ---------- Merge (used by import and Dropbox sync) ----------
+   Правило: для каждой записи побеждает версия с более поздним updated. */
+async function mergeIn(data){
+  let localChanged=false,currentChanged=false;
+  const merge=async(arr,incoming,storeName)=>{
+    for(const r of incoming||[]){
+      if(!r||!r.id)continue;r.updated=r.updated||0;
+      const i=arr.findIndex(x=>x.id===r.id);
+      if(i<0||r.updated>(arr[i].updated||0)){
+        if(storeName==='notes'&&!r.deleted){r.tags=r.tags||[];r.text=r.text??htmlToText(r.html||'')}
+        if(i<0)arr.push(r);else arr[i]=r;
+        await put(storeName,r);localChanged=true;if(r.id===currentId)currentChanged=true;
+      }
+    }
+  };
+  await merge(notebooks,data.notebooks,'notebooks');
+  await merge(notes,data.notes,'notes');
+  const remoteMap=new Map();(data.notes||[]).forEach(n=>remoteMap.set(n.id,n.updated||0));(data.notebooks||[]).forEach(b=>remoteMap.set('nb:'+b.id,b.updated||0));
+  const needUpload=notes.some(n=>!remoteMap.has(n.id)||n.updated>remoteMap.get(n.id))||notebooks.some(b=>!remoteMap.has('nb:'+b.id)||(b.updated||0)>remoteMap.get('nb:'+b.id));
+  if(localChanged){
+    await ensureNotebook();
+    for(const n of liveNotes())if(!liveNbs().find(b=>b.id===n.notebookId)){n.notebookId=liveNbs()[0].id;await put('notes',n)}
+    const editing=saveTimer||[$('#title'),$('#body')].includes(document.activeElement);
+    if(currentChanged&&!editing){if(cur())loadEditor();else openNote(null)}
+    renderAll();
+  }
+  return {localChanged,needUpload};
+}
+async function importData(file){
+  try{const data=JSON.parse(await file.text());if(!Array.isArray(data.notes))throw 0;
+    const before=notes.length;const r=await mergeIn(data);scheduleSync();
+    toast(r.localChanged?`Импорт выполнен (новых: ${notes.length-before})`:'Новых изменений в файле нет');
+  }catch(e){alert('Не удалось прочитать файл. Нужен JSON, сохранённый через «Экспорт».')}
+}
+
+/* ---------- Dropbox (OAuth PKCE, без сервера) ---------- */
+const DBX_FILE='/notes.json';
+const redirectUri=()=>location.origin+location.pathname.replace(/index\.html$/,'');
+const b64url=buf=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+async function isDbxConnected(){try{const t=await getMeta('dbxTokens');return !!(t&&t.refresh)}catch(e){return false}}
+async function dbxConnect(){
+  const key=$('#dbxKey').value.trim();if(!key){toast('Вставьте App key');return}
+  if(!crypto.subtle){alert('Для подключения нужно открыть приложение по https://');return}
+  lsSet('dbx_key',key);
+  const verifier=b64url(crypto.getRandomValues(new Uint8Array(48)));
+  const challenge=b64url(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier)));
+  const state=uid();lsSet('dbx_verifier',verifier);lsSet('dbx_state',state);
+  const p=new URLSearchParams({client_id:key,response_type:'code',code_challenge:challenge,code_challenge_method:'S256',redirect_uri:redirectUri(),token_access_type:'offline',state});
+  location.href='https://www.dropbox.com/oauth2/authorize?'+p;
+}
+async function handleDropboxRedirect(){
+  const p=new URLSearchParams(location.search);
+  if(!p.has('code')&&!p.has('error'))return null;
+  history.replaceState(null,'',redirectUri());
+  if(p.has('error')){toast('Dropbox: доступ не выдан');return 'err'}
+  if(p.get('state')!==lsGet('dbx_state')){toast('Dropbox: неверный ответ авторизации, попробуйте ещё раз');return 'err'}
+  try{
+    const r=await fetch('https://api.dropboxapi.com/oauth2/token',{method:'POST',body:new URLSearchParams({code:p.get('code'),grant_type:'authorization_code',code_verifier:lsGet('dbx_verifier'),client_id:lsGet('dbx_key'),redirect_uri:redirectUri()})});
+    const j=await r.json();if(!r.ok||!j.access_token)throw new Error(j.error_description||j.error||r.status);
+    await setMeta('dbxTokens',{access:j.access_token,expires:Date.now()+(j.expires_in||14400)*1000,refresh:j.refresh_token,key:lsGet('dbx_key')});
+    lsSet('dbx_verifier',null);lsSet('dbx_state',null);return 'ok';
+  }catch(e){alert('Не удалось подключить Dropbox: '+e.message+'\nПроверьте App key и Redirect URI в настройках приложения Dropbox.');return 'err'}
+}
+async function accessToken(){
+  const t=await getMeta('dbxTokens');if(!t||!t.refresh)return null;
+  if(t.access&&t.expires>Date.now()+60000)return t.access;
+  const r=await fetch('https://api.dropboxapi.com/oauth2/token',{method:'POST',body:new URLSearchParams({grant_type:'refresh_token',refresh_token:t.refresh,client_id:t.key})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){if(r.status===400||r.status===401){await delMeta('dbxTokens');updateSyncUI();throw new Error('Доступ к Dropbox отозван — подключите заново')}throw new Error('Dropbox недоступен ('+r.status+')')}
+  t.access=j.access_token;t.expires=Date.now()+(j.expires_in||14400)*1000;await setMeta('dbxTokens',t);return t.access;
+}
+async function dbxDownload(tok){
+  const r=await fetch('https://content.dropboxapi.com/2/files/download',{method:'POST',headers:{Authorization:'Bearer '+tok,'Dropbox-API-Arg':JSON.stringify({path:DBX_FILE})}});
+  if(r.status===409){const e=await r.json().catch(()=>({}));if(JSON.stringify(e).includes('not_found'))return null;throw new Error('Dropbox: '+(e.error_summary||'ошибка чтения'))}
+  if(!r.ok)throw new Error('Dropbox: ошибка чтения ('+r.status+')');
+  const meta=JSON.parse(r.headers.get('Dropbox-API-Result')||'{}');
+  return {data:JSON.parse(await r.text()),rev:meta.rev};
+}
+async function dbxUpload(tok,rev){
+  const mode=rev?{'.tag':'update',update:rev}:{'.tag':'add'};
+  const r=await fetch('https://content.dropboxapi.com/2/files/upload',{method:'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/octet-stream','Dropbox-API-Arg':JSON.stringify({path:DBX_FILE,mode,autorename:false,mute:true})},body:JSON.stringify(allData())});
+  if(r.status===409)return false; // файл изменился на другом устройстве — перечитаем и сольём ещё раз
+  if(!r.ok)throw new Error('Dropbox: ошибка записи ('+r.status+')');
+  return true;
+}
+let syncing=false,syncAgain=false,syncTimer=null,lastSyncAt=+lsGet('lastSync')||0,syncError='';
+function scheduleSync(){clearTimeout(syncTimer);syncTimer=setTimeout(sync,2500)}
+async function sync(manual){
+  if(!(await isDbxConnected())){if(manual)openModal();return}
+  if(!navigator.onLine){syncError='нет сети';updateSyncUI();return}
+  if(syncing){syncAgain=true;return}
+  syncing=true;syncError='';updateSyncUI();
+  try{
+    await flushSave();
+    const tok=await accessToken();
+    for(let attempt=0;attempt<4;attempt++){
+      const remote=await dbxDownload(tok);
+      const {needUpload}=remote?await mergeIn(remote.data):{needUpload:true};
+      if(!needUpload||await dbxUpload(tok,remote&&remote.rev))break;
+    }
+    lastSyncAt=Date.now();lsSet('lastSync',lastSyncAt);
+    if(manual)toast('Синхронизировано');
+  }catch(e){syncError=e.message||String(e);if(manual)toast(syncError)}
+  syncing=false;updateSyncUI();
+  if(syncAgain){syncAgain=false;scheduleSync()}
+}
+async function updateSyncUI(){
+  const on=await isDbxConnected();
+  const txt=!on?'☁ Dropbox не подключён':syncing?'⟳ Синхронизация…':syncError?'⚠ '+syncError:lastSyncAt?'☁ Синхронизировано '+fmtShort(lastSyncAt):'☁ Dropbox подключён';
+  $('#syncState').textContent=txt;$('#syncIcon').title=txt;
+  $('#syncIcon').style.color=!on?'var(--muted)':syncError?'#d33':'var(--accent)';
+  $('#syncIcon').style.animation=syncing?'spin 1s linear infinite':'';
+  $('#dbxOff').classList.toggle('hidden',on);$('#dbxOn').classList.toggle('hidden',!on);
+  $('#lastSync').textContent=lastSyncAt?'Последняя синхронизация: '+fmt(lastSyncAt):'';
+}
+function openModal(){$('#redir').textContent=redirectUri();$('#dbxKey').value=lsGet('dbx_key')||'';updateSyncUI();$('#modal').classList.remove('hidden')}
+document.head.insertAdjacentHTML('beforeend','<style>@keyframes spin{to{transform:rotate(360deg)}}</style>');
+
+/* ---------- Editor helpers ---------- */
+function exec(cmd,val=null){$('#body').focus();document.execCommand(cmd,false,val);markDirty()}
+function toggleChecklist(){
+  const sel=getSelection();const node=sel.anchorNode;const el=node&&(node.nodeType===1?node:node.parentElement);
+  let ul=el&&el.closest('#body ul');
+  if(!ul){exec('insertUnorderedList');const n2=getSelection().anchorNode;const e2=n2&&(n2.nodeType===1?n2:n2.parentElement);ul=e2&&e2.closest('#body ul');if(ul)ul.classList.add('checklist')}
+  else ul.classList.toggle('checklist');
+  markDirty();
+}
+function resizeImage(file){return new Promise(res=>{const img=new Image();img.onload=()=>{const max=1600;let{width:w,height:h}=img;if(w<=max&&h<=max&&file.size<400e3){URL.revokeObjectURL(img.src);const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(file);return}const k=Math.min(1,max/Math.max(w,h));const c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(img.src);res(c.toDataURL('image/jpeg',.85))};img.onerror=()=>res(null);img.src=URL.createObjectURL(file)})}
+async function insertImages(files){for(const f of [...files].filter(f=>f.type.startsWith('image/'))){const url=await resizeImage(f);if(url)exec('insertHTML',`<img src="${url}" alt="">`)}}
+function insertTable(){const s=prompt('Размер таблицы (столбцы x строки):','3x3');if(!s)return;const m=s.match(/(\d+)\D+(\d+)/);if(!m)return;const c=Math.min(+m[1],12),r=Math.min(+m[2],50);
+  exec('insertHTML','<table>'+Array.from({length:r},(_,i)=>'<tr>'+Array.from({length:c},()=>i?'<td>&nbsp;</td>':'<th>&nbsp;</th>').join('')+'</tr>').join('')+'</table><p><br></p>')}
+function addTag(t){t=t.trim().replace(/^#/,'').replace(/,/g,'');const n=cur();if(!t||!n||n.tags.includes(t))return;n.tags.push(t);n.updated=Date.now();saveNote(n);renderAll()}
+
+/* ---------- Events ---------- */
+$('#newBtn').onclick=createNote;$('#fab').onclick=createNote;
+$('#addNb').onclick=addNotebook;
+$('#side').addEventListener('click',e=>{
+  const r=e.target.dataset.ren,d=e.target.dataset.delnb;
+  if(r){e.stopPropagation();return renameNotebook(r)}if(d){e.stopPropagation();return deleteNotebook(d)}
+  const si=e.target.closest('.si');if(si){setView({type:si.dataset.view,id:si.dataset.id});pane('list')}
+});
+$('#notes').addEventListener('click',e=>{const ni=e.target.closest('.ni');if(ni){openNote(ni.dataset.id);pane('ed')}});
+$('#toSide').onclick=()=>pane('side');
+$('#backBtn').onclick=()=>{flushSave();pane('list')};
+$('#search').addEventListener('input',e=>{query=e.target.value;renderList()});
+$('#sort').onchange=e=>{sortBy=e.target.value;lsSet('sort',sortBy);renderList()};
+$('#emptyTrash').onclick=async()=>{const t=liveNotes().filter(n=>n.trashed);if(!confirm(`Удалить навсегда ${t.length} заметок? Это действие нельзя отменить.`))return;for(const n of t)await deleteForever(n.id);openNote(null);renderAll()};
+$('#title').addEventListener('input',markDirty);
+$('#title').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#body').focus()}});
+$('#body').addEventListener('input',markDirty);
+$('#body').addEventListener('click',e=>{
+  const li=e.target.closest('ul.checklist > li');
+  if(li&&e.target===li&&e.offsetX<24&&cur()&&!cur().trashed){li.classList.toggle('done');markDirty();return}
+  const a=e.target.closest('a');if(a&&(e.ctrlKey||e.metaKey||isMobile())){e.preventDefault();window.open(a.href,'_blank','noopener')}
+});
+$('#body').addEventListener('paste',e=>{const files=[...(e.clipboardData.files||[])];if(files.some(f=>f.type.startsWith('image/'))){e.preventDefault();insertImages(files)}});
+$('#body').addEventListener('dragover',e=>e.preventDefault());
+$('#body').addEventListener('drop',e=>{if(e.dataTransfer.files.length){e.preventDefault();insertImages(e.dataTransfer.files)}});
+$('#tb').addEventListener('mousedown',e=>{if(e.target.closest('button'))e.preventDefault()});
+$('#tb').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.cmd==='hiliteColor')return exec('hiliteColor','#ffe066');
+  if(b.dataset.cmd)return exec(b.dataset.cmd);
+  if(b.dataset.block)return exec('formatBlock','<'+b.dataset.block+'>');
+});
+$('#checkBtn').onclick=toggleChecklist;
+$('#linkBtn').onclick=()=>{const u=prompt('Адрес ссылки:','https://');if(u&&u!=='https://')exec('createLink',u)};
+$('#imgBtn').onclick=()=>$('#imgFile').click();
+$('#imgFile').onchange=e=>{insertImages(e.target.files);e.target.value=''};
+$('#tableBtn').onclick=insertTable;
+$('#tagIn').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===','){e.preventDefault();addTag(e.target.value);e.target.value=''}else if(e.key==='Backspace'&&!e.target.value&&cur()&&cur().tags.length){cur().tags.pop();cur().updated=Date.now();saveNote(cur());renderAll()}});
+$('#tagIn').addEventListener('blur',e=>{if(e.target.value.trim()){addTag(e.target.value);e.target.value=''}});
+$('#tags').addEventListener('click',e=>{const t=e.target.dataset.rmtag;if(t!==undefined){const n=cur();n.tags=n.tags.filter(x=>x!==t);n.updated=Date.now();saveNote(n);renderAll()}});
+$('#nbSel').onchange=async e=>{const n=cur();n.notebookId=e.target.value;n.updated=Date.now();await saveNote(n);renderAll()};
+$('#pinBtn').onclick=async()=>{const n=cur();n.pinned=!n.pinned;n.updated=Date.now();await saveNote(n);renderAll()};
+$('#dupBtn').onclick=async()=>{flushSave();const s=cur();const n={...newNoteObj(s.notebookId),title:s.title+' (копия)',html:s.html,text:s.text,tags:[...s.tags]};notes.push(n);await saveNote(n);renderSide();openNote(n.id);toast('Копия создана')};
+$('#trashBtn').onclick=toTrash;
+$('#restore').onclick=restore;
+$('#delForever').onclick=async()=>{if(!confirm('Удалить заметку навсегда? Это действие нельзя отменить.'))return;await deleteForever(currentId);afterRemove()};
+$('#exportNote').onclick=()=>{flushSave();const n=cur();download(safeName(n.title)+'.html',`<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>${esc(n.title)}</title><style>body{font-family:Segoe UI,Arial,sans-serif;max-width:800px;margin:40px auto;line-height:1.6;padding:0 20px}img{max-width:100%}blockquote{border-left:3px solid #00a82d;margin:8px 0;padding:2px 14px;color:#666}pre{background:#f3f3f3;padding:10px}ul.checklist{list-style:none}ul.checklist li:before{content:"☐ "}ul.checklist li.done:before{content:"☑ "}td,th{border:1px solid #ccc;padding:4px 8px}table{border-collapse:collapse}</style></head><body><h1>${esc(n.title)}</h1>${n.html}</body></html>`,'text/html')};
+$('#exportMd').onclick=()=>{flushSave();const n=cur();download(safeName(n.title)+'.md','# '+(n.title||'Без названия')+'\n\n'+(n.tags.length?n.tags.map(t=>'#'+t).join(' ')+'\n\n':'')+toMarkdown(n.html),'text/markdown')};
+$('#printBtn').onclick=()=>{flushSave();window.print()};
+$('#exportAll').onclick=()=>{flushSave();download('мои-заметки-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(allData(),null,1),'application/json');toast('Резервная копия сохранена')};
+$('#importAll').onclick=()=>$('#importFile').click();
+$('#importFile').onchange=e=>{if(e.target.files[0])importData(e.target.files[0]);e.target.value=''};
+$('#theme').onclick=()=>{document.body.classList.toggle('dark');lsSet('theme',document.body.classList.contains('dark')?'dark':'light')};
+$('#dbxBtn').onclick=openModal;$('#syncState').onclick=openModal;
+$('#syncIcon').onclick=()=>sync(true);
+$('#dbxConnect').onclick=dbxConnect;
+$('#syncNow').onclick=()=>sync(true);
+$('#dbxDisconnect').onclick=async()=>{if(!confirm('Отключить Dropbox на этом устройстве? Заметки останутся и здесь, и в Dropbox.'))return;await delMeta('dbxTokens');lastSyncAt=0;lsSet('lastSync',null);updateSyncUI()};
+$('#copyRedir').onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(redirectUri()).then(()=>toast('Скопировано'),()=>{})};
+$('#modal').addEventListener('click',e=>{if(e.target.id==='modal'||e.target.hasAttribute('data-close'))$('#modal').classList.add('hidden')});
+document.addEventListener('keydown',e=>{
+  const c=e.ctrlKey||e.metaKey;
+  if(c&&e.altKey&&e.code==='KeyN'){e.preventDefault();createNote()}
+  else if(c&&e.code==='KeyF'){e.preventDefault();pane('list');$('#search').focus();$('#search').select()}
+  else if(c&&e.code==='KeyK'&&document.activeElement===$('#body')){e.preventDefault();$('#linkBtn').click()}
+  else if(c&&e.shiftKey&&e.code==='KeyC'&&document.activeElement===$('#body')){e.preventDefault();toggleChecklist()}
+  else if(c&&e.code==='KeyS'){e.preventDefault();flushSave();sync(true)}
+  else if(e.key==='Escape'){if(!$('#modal').classList.contains('hidden'))$('#modal').classList.add('hidden');else if(document.activeElement===$('#search')){query='';$('#search').value='';renderList()}}
+});
+window.addEventListener('beforeunload',()=>{if(saveTimer){const n=cur();if(n){n.title=$('#title').value;n.html=$('#body').innerHTML;n.text=htmlToText(n.html);n.updated=Date.now();put('notes',n)}}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){flushSave().then(()=>sync())}else sync()});
+window.addEventListener('online',()=>sync());
+try{document.execCommand('defaultParagraphSeparator',false,'p')}catch(e){}
+
+/* ---------- PWA ---------- */
+let installEvt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;$('#installBtn').classList.remove('hidden')});
+$('#installBtn').onclick=async()=>{if(!installEvt)return;installEvt.prompt();await installEvt.userChoice;installEvt=null;$('#installBtn').classList.add('hidden')};
+if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+
+init().catch(e=>{document.body.innerHTML='<div style="padding:40px;font-family:sans-serif">Не удалось открыть хранилище браузера: '+esc(e&&e.message||e)+'</div>'});
+</script>
+</body>
+</html>
 
