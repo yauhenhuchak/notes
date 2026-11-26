@@ -490,18 +490,33 @@ async function accessToken(){
   if(!r.ok){if(r.status===400||r.status===401){await delMeta('dbxTokens');updateSyncUI();throw new Error('Доступ к Dropbox отозван — подключите заново')}throw new Error('Dropbox недоступен ('+r.status+')')}
   t.access=j.access_token;t.expires=Date.now()+(j.expires_in||14400)*1000;await setMeta('dbxTokens',t);return t.access;
 }
+// Запрос к content-эндпоинтам Dropbox. Вариант 1 — аргументы в заголовке;
+// если Dropbox ответил 400, вариант 2 — аргументы в URL и «браузерный» Content-Type (описан в документации Dropbox для JS).
+async function dbxContent(endpoint,tok,arg,body){
+  const url='https://content.dropboxapi.com/2/files/'+endpoint;
+  const h1={Authorization:'Bearer '+tok,'Dropbox-API-Arg':JSON.stringify(arg)};
+  if(body!==undefined)h1['Content-Type']='application/octet-stream';
+  let r=await fetch(url,{method:'POST',headers:h1,body,cache:'no-store'});
+  if(r.status===400){
+    const first=await r.text().catch(()=>'');
+    r=await fetch(url+'?arg='+encodeURIComponent(JSON.stringify(arg)),{method:'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':'text/plain; charset=dropbox-cors-hack'},body:body===undefined?'':body,cache:'no-store'});
+    if(r.status===400){const second=await r.text().catch(()=>'');throw new Error('Dropbox 400: '+(second||first).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,200))}
+  }
+  return r;
+}
+async function dbxErr(r,what){let t=await r.text().catch(()=>'');try{t=JSON.parse(t).error_summary||t}catch(e){}return new Error('Dropbox: ошибка '+what+' ('+r.status+') '+String(t).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,160))}
 async function dbxDownload(tok){
-  const r=await fetch('https://content.dropboxapi.com/2/files/download',{method:'POST',headers:{Authorization:'Bearer '+tok,'Dropbox-API-Arg':JSON.stringify({path:DBX_FILE})}});
+  const r=await dbxContent('download',tok,{path:DBX_FILE});
   if(r.status===409){const e=await r.json().catch(()=>({}));if(JSON.stringify(e).includes('not_found'))return null;throw new Error('Dropbox: '+(e.error_summary||'ошибка чтения'))}
-  if(!r.ok)throw new Error('Dropbox: ошибка чтения ('+r.status+')');
+  if(!r.ok)throw await dbxErr(r,'чтения');
   const meta=JSON.parse(r.headers.get('Dropbox-API-Result')||'{}');
   return {data:JSON.parse(await r.text()),rev:meta.rev};
 }
 async function dbxUpload(tok,rev){
   const mode=rev?{'.tag':'update',update:rev}:{'.tag':'add'};
-  const r=await fetch('https://content.dropboxapi.com/2/files/upload',{method:'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/octet-stream','Dropbox-API-Arg':JSON.stringify({path:DBX_FILE,mode,autorename:false,mute:true})},body:JSON.stringify(allData())});
+  const r=await dbxContent('upload',tok,{path:DBX_FILE,mode,autorename:false,mute:true},JSON.stringify(allData()));
   if(r.status===409)return false; // файл изменился на другом устройстве — перечитаем и сольём ещё раз
-  if(!r.ok)throw new Error('Dropbox: ошибка записи ('+r.status+')');
+  if(!r.ok)throw await dbxErr(r,'записи');
   return true;
 }
 let syncing=false,syncAgain=false,syncTimer=null,lastSyncAt=+lsGet('lastSync')||0,syncError='';
