@@ -15,7 +15,11 @@ body.dark{--bg:#1b1d1f;--panel:#23262a;--side:#141618;--sideText:#b9c0c5;--sideH
 html,body{margin:0;height:100%;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--text);background:var(--bg);font-size:14px}
 button{font:inherit;cursor:pointer}
 input,select{font:inherit;color:var(--text)}
-#app{display:grid;grid-template-columns:230px 330px 1fr;height:100vh;height:100dvh}
+#app{display:grid;grid-template-columns:var(--w1,230px) var(--w2,330px) minmax(0,1fr);height:100vh;height:100dvh}
+#side,#list{position:relative}
+.split{position:absolute;top:0;right:0;width:7px;height:100%;cursor:col-resize;z-index:4;touch-action:none}
+.split:hover,.split.drag{background:linear-gradient(90deg,transparent 4px,var(--accent) 4px)}
+body.resizing,body.resizing *{cursor:col-resize!important;user-select:none!important}
 /* Sidebar */
 #side{background:var(--side);color:var(--sideText);display:flex;flex-direction:column;overflow:hidden}
 #newBtn{margin:14px;padding:10px;border:0;border-radius:20px;background:var(--accent);color:#fff;font-weight:600;font-size:15px}
@@ -113,6 +117,7 @@ input,select{font:inherit;color:var(--text)}
 /* Mobile: one pane at a time */
 @media (max-width:760px){
   #app{grid-template-columns:1fr}
+  .split{display:none}
   body:not(.p-side) #side,body:not(.p-list) #list,body:not(.p-ed) #ed{display:none}
   .mob{display:inline-block}
   #fab{display:block;position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;border:0;background:var(--accent);color:#fff;font-size:28px;box-shadow:0 4px 14px rgba(0,0,0,.3);z-index:5}
@@ -144,13 +149,14 @@ input,select{font:inherit;color:var(--text)}
       <div class="sh"><span></span></div>
       <div class="si" data-view="trash"><span>🗑️</span><span class="n">Корзина</span><span class="c" id="cTrash"></span></div>
     </div>
+    <div class="split" data-split="w1" title="Потяните, чтобы изменить ширину. Двойной щелчок — сбросить"></div>
     <div id="sideFoot">
       <button id="dbxBtn" title="Синхронизация через Dropbox">☁ Dropbox</button>
       <button id="exportAll" title="Сохранить все заметки в JSON-файл">⬇ Экспорт</button>
       <button id="importAll" title="Загрузить заметки из JSON-файла: резервной копии этого приложения или выгрузки из OneNote">⬆ Импорт</button>
       <button id="theme" title="Тёмная/светлая тема">🌓</button>
       <button id="installBtn" class="hidden" title="Установить как приложение">📲 Установить</button>
-      <div id="syncState"></div><div style="width:100%;font-size:10px;opacity:.4">версия 3 · импорт OneNote</div>
+      <div id="syncState"></div><div style="width:100%;font-size:10px;opacity:.4">версия 4</div>
       <input type="file" id="importFile" accept=".json,application/json" class="hidden">
     </div>
   </aside>
@@ -169,6 +175,7 @@ input,select{font:inherit;color:var(--text)}
       </div>
     </div>
     <div id="notes"></div>
+    <div class="split" data-split="w2" title="Потяните, чтобы изменить ширину. Двойной щелчок — сбросить"></div>
   </section>
 
   <main id="ed">
@@ -768,6 +775,23 @@ window.addEventListener('beforeunload',()=>{if(saveTimer){const n=cur();if(n){n.
 document.addEventListener('visibilitychange',()=>{if(document.hidden){flushSave().then(()=>sync())}else sync()});
 window.addEventListener('online',()=>sync());
 try{document.execCommand('defaultParagraphSeparator',false,'p')}catch(e){}
+
+
+/* ---------- Изменение ширины панелей ---------- */
+const PANE_LIM={w1:[150,450,230],w2:[200,800,330]};
+function setPaneW(k,v){const[mn,mx]=PANE_LIM[k];v=Math.max(mn,Math.min(mx,Math.round(v)));document.getElementById('app').style.setProperty('--'+k,v+'px');return v}
+['w1','w2'].forEach(k=>{const v=+lsGet('pane_'+k);if(v)setPaneW(k,v)});
+document.querySelectorAll('.split').forEach(h=>{
+  const k=h.dataset.split,panel=h.parentElement;
+  h.addEventListener('pointerdown',e=>{
+    e.preventDefault();h.setPointerCapture(e.pointerId);h.classList.add('drag');document.body.classList.add('resizing');
+    const x0=e.clientX,w0=panel.getBoundingClientRect().width;
+    const move=ev=>setPaneW(k,w0+ev.clientX-x0);
+    const up=ev=>{h.removeEventListener('pointermove',move);h.removeEventListener('pointerup',up);h.classList.remove('drag');document.body.classList.remove('resizing');lsSet('pane_'+k,Math.round(panel.getBoundingClientRect().width))};
+    h.addEventListener('pointermove',move);h.addEventListener('pointerup',up);
+  });
+  h.addEventListener('dblclick',()=>{setPaneW(k,PANE_LIM[k][2]);lsSet('pane_'+k,null)});
+});
 
 /* ---------- PWA ---------- */
 let installEvt=null;

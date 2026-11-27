@@ -1,6 +1,6 @@
 // Service worker: приложение открывается и без интернета.
 // Стратегия «сначала сеть, потом кэш» — обновления приходят сразу, офлайн работает из кэша.
-const CACHE = 'my-notes-v4';
+const CACHE = 'my-notes-v5';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
