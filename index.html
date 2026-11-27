@@ -147,7 +147,7 @@ input,select{font:inherit;color:var(--text)}
     <div id="sideFoot">
       <button id="dbxBtn" title="Синхронизация через Dropbox">☁ Dropbox</button>
       <button id="exportAll" title="Сохранить все заметки в JSON-файл">⬇ Экспорт</button>
-      <button id="importAll" title="Загрузить заметки из JSON-файла">⬆ Импорт</button>
+      <button id="importAll" title="Загрузить заметки из JSON-файла: резервной копии этого приложения или выгрузки из OneNote">⬆ Импорт</button>
       <button id="theme" title="Тёмная/светлая тема">🌓</button>
       <button id="installBtn" class="hidden" title="Установить как приложение">📲 Установить</button>
       <div id="syncState"></div>
@@ -293,9 +293,9 @@ async function init(){
   const authResult=await handleDropboxRedirect();
   if(!notebooks.length&&!(await isDbxConnected())){
     // фиксированные id: на разных устройствах эти записи сольются, а не задвоятся
-    const nb={id:'default-nb',name:'Мои заметки',created:1,updated:1};notebooks.push(nb);await put('notebooks',nb);
+    const nb={id:'default-nb',name:'Мои заметки',created:Date.UTC(2026,10,26),updated:Date.UTC(2026,10,26)};notebooks.push(nb);await put('notebooks',nb);
     if(!notes.length){
-      const n=newNoteObj(nb.id);n.id='welcome';n.created=n.updated=1;n.title='Добро пожаловать 👋';n.tags=['справка'];
+      const n=newNoteObj(nb.id);n.id='welcome';n.created=n.updated=Date.UTC(2026,10,26);n.title='Добро пожаловать 👋';n.tags=['справка'];
       n.html='<p>Это ваше личное приложение для заметок. Работает без интернета, а при подключённом Dropbox синхронизируется между Android, Windows и macOS.</p><h2>Что умеет</h2><ul class="checklist"><li class="done">Блокноты, теги, избранное, корзина</li><li class="done">Форматирование, списки задач, таблицы, картинки (Ctrl+V или перетаскиванием)</li><li class="done">Поиск по всем заметкам, по тегу: <code>#тег</code></li><li>Подключите Dropbox: кнопка «☁ Dropbox» в меню слева</li><li>Установите как приложение: в Chrome/Edge — значок установки в адресной строке, на Android — меню ⋮ → «Установить приложение»</li></ul><h2>Горячие клавиши</h2><p>Ctrl+Alt+N — новая заметка · Ctrl+F — поиск · Ctrl+K — ссылка · Ctrl+Shift+C — список задач · Ctrl+клик — открыть ссылку</p>';
       n.text=htmlToText(n.html);notes.push(n);await put('notes',n);
     }
@@ -310,7 +310,7 @@ async function init(){
 }
 async function ensureNotebook(){if(!liveNbs().length){const nb={id:notebooks.some(b=>b.id==='default-nb')?uid():'default-nb',name:'Мои заметки',created:Date.now(),updated:Date.now()};notebooks.push(nb);await put('notebooks',nb)}}
 function newNoteObj(nbId){const t=Date.now();return{id:uid(),title:'',html:'',text:'',notebookId:nbId,tags:[],pinned:false,trashed:false,created:t,updated:t}}
-function htmlToText(h){const d=document.createElement('div');d.innerHTML=h;return d.textContent.replace(/\s+/g,' ').trim()}
+function htmlToText(h){const d=document.createElement('div');d.innerHTML=String(h||'').replace(/<\/(p|div|h[1-6]|li|td|th|pre|blockquote|tr)>|<br\s*\/?>/gi,' $&');return d.textContent.replace(/\s+/g,' ').trim()}
 
 /* ---------- Filtering ---------- */
 function visibleNotes(){
@@ -448,10 +448,138 @@ async function mergeIn(data){
   return {localChanged,needUpload};
 }
 async function importData(file){
-  try{const data=JSON.parse(await file.text());if(!Array.isArray(data.notes))throw 0;
+  let data;try{data=JSON.parse(await file.text())}catch(e){alert('Не удалось прочитать файл: это не JSON.');return}
+  if(data&&data.app==='onenote-export'){try{await importOneNote(data)}catch(e){alert('Ошибка импорта из OneNote: '+(e.message||e))}return}
+  try{if(!Array.isArray(data.notes))throw 0;
     const before=notes.length;const r=await mergeIn(data);scheduleSync();
     toast(r.localChanged?`Импорт выполнен (новых: ${notes.length-before})`:'Новых изменений в файле нет');
   }catch(e){alert('Не удалось прочитать файл. Нужен JSON, сохранённый через «Экспорт».')}
+}
+
+/* ---------- Импорт из OneNote ----------
+   Вход: JSON, созданный скриптом Export-OneNote.ps1 (страницы в формате OneNote XML с картинками и вложениями).
+   Каждая страница превращается в заметку; каждый раздел OneNote — в блокнот «Книжка › Группа › Раздел». */
+function onHash(s){let a=0x811c9dc5,b=0x01000193^0x5bd1e995;for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);a=Math.imul(a^c,0x01000193)>>>0;b=Math.imul(b^c,0x5bd1e995)>>>0;b^=b>>>15}return a.toString(16).padStart(8,'0')+b.toString(16).padStart(8,'0')}
+function oneNoteToHtml(xmlStr){
+  const doc=new DOMParser().parseFromString(xmlStr,'application/xml');
+  if(doc.getElementsByTagName('parsererror').length)throw new Error('Некорректный XML страницы');
+  const page=doc.documentElement;
+  const kids=(el,n)=>[...el.children].filter(c=>c.localName===n);
+  const kid=(el,n)=>[...el.children].find(c=>c.localName===n);
+  const all=(el,n)=>[...el.getElementsByTagNameNS('*',n)];
+  const attr=(el,n)=>el&&el.getAttribute(n);
+  const escA=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const qs={};all(page,'QuickStyleDef').forEach(q=>qs[attr(q,'index')]=q);
+  const tags={};all(page,'TagDef').forEach(t=>tags[attr(t,'index')]=t);
+  const isTodoDef=d=>d&&(attr(d,'symbol')==='3'||/to ?do|задач|флажок|check/i.test(attr(d,'name')||''));
+  // HTML из <one:T> (CDATA) — оставляем форматирование OneNote (span со стилями, ссылки), убираем лишнее
+  const cleanHtml=h=>{const t=document.createElement('template');t.innerHTML=h;t.content.querySelectorAll('script,style,meta,link').forEach(e=>e.remove());t.content.querySelectorAll('*').forEach(e=>[...e.attributes].forEach(a=>{if(/^on/i.test(a.name))e.removeAttribute(a.name)}));return t.innerHTML};
+  const size=el=>{const s=kid(el,'Size');const w=s&&parseFloat(attr(s,'width'));return w?` style="width:${Math.round(w*4/3)}px;max-width:100%"`:''};
+  const img=el=>{
+    const d=kid(el,'Data');const fmt=(attr(el,'format')||'png').toLowerCase();
+    const alt=escA(attr(el,'alt')||'');
+    if(!d||!d.textContent.trim())return '<p><i>🖼 изображение не выгружено</i></p>';
+    if(/emf|wmf/.test(fmt))return '<p><i>🖼 изображение в формате '+fmt.toUpperCase()+' не поддерживается браузером</i></p>';
+    const mime=fmt==='jpg'?'image/jpeg':'image/'+fmt;
+    return `<img src="data:${mime};base64,${d.textContent.replace(/\s+/g,'')}" alt="${alt}"${size(el)}>`;
+  };
+  const file=(el,icon)=>{
+    const name=attr(el,'preferredName')||(attr(el,'pathSource')||'').split(/[\\/]/).pop()||'файл';
+    const data=attr(el,'exportData');
+    if(data)return `<p>${icon} <a href="data:application/octet-stream;base64,${data}" download="${escA(name)}">${escA(name)}</a></p>`;
+    return `<p>${icon} ${escA(name)} <i>(${attr(el,'exportSkipped')==='size'?'файл слишком большой, не перенесён':'файл не найден в кэше OneNote, не перенесён'})</i></p>`;
+  };
+  const table=el=>{
+    const rows=kids(el,'Row').map(r=>'<tr>'+kids(r,'Cell').map(c=>{const bg=attr(c,'shadingColor');return `<td${bg&&bg!=='none'?` style="background:${escA(bg)}"`:''}>${kids(c,'OEChildren').map(children).join('')||'&nbsp;'}</td>`}).join('')+'</tr>').join('');
+    return `<table>${rows}</table>`;
+  };
+  const ink='<p><i>✏ рукописный фрагмент (рукописный ввод не переносится)</i></p>';
+  // Содержимое одного абзаца (one:OE)
+  function oeContent(oe,inline){
+    const q=qs[attr(oe,'quickStyleIndex')];const qn=(attr(q,'name')||'p').toLowerCase();
+    const align=attr(oe,'alignment');const st=align&&align!=='left'?` style="text-align:${escA(align)}"`:'';
+    const tagLabels=kids(oe,'Tag').map(t=>tags[attr(t,'index')]).filter(d=>d&&!isTodoDef(d)).map(d=>`<mark>[${escA(attr(d,'name'))}]</mark> `).join('');
+    let out='',text='';
+    const flushText=()=>{if(!text&&!tagLabels)return;const body=tagLabels+text;text='';
+      if(inline){out+=body;return}
+      if(/^h[1-6]$/.test(qn))out+=`<${qn}${st}>${body}</${qn}>`;
+      else if(qn==='code')out+=`<pre>${body}</pre>`;
+      else if(qn==='cite'||qn==='quote'||qn==='blockquote')out+=`<blockquote${st}>${body}</blockquote>`;
+      else out+=`<p${st}>${body}</p>`};
+    for(const c of oe.children){
+      switch(c.localName){
+        case'T':text+=cleanHtml(c.textContent);break;
+        case'Image':flushText();out+=inline?img(c):`<p${st}>${img(c)}</p>`;break;
+        case'Table':flushText();out+=table(c);break;
+        case'InsertedFile':flushText();out+=file(c,'📎');break;
+        case'MediaFile':flushText();out+=file(c,'🎵');break;
+        default:if(/^Ink/.test(c.localName)){flushText();out+=ink}
+      }
+    }
+    flushText();
+    if(!out&&!inline)out='<p><br></p>';
+    return out;
+  }
+  function listKind(oe){
+    const todo=kids(oe,'Tag').find(t=>isTodoDef(tags[attr(t,'index')]));
+    if(todo)return{tag:'ul',cls:'checklist',done:attr(todo,'completed')==='true'};
+    const l=kid(oe,'List');if(!l)return null;
+    return kid(l,'Number')?{tag:'ol'}:{tag:'ul'};
+  }
+  // Последовательность абзацев (one:OEChildren); соседние пункты списка собираются в один <ul>/<ol>
+  function children(oec){
+    let html='',cur=null,items=[];
+    const flush=()=>{if(cur){html+=`<${cur.tag}${cur.cls?` class="${cur.cls}"`:''}>${items.join('')}</${cur.tag}>`;cur=null;items=[]}};
+    for(const oe of kids(oec,'OE')){
+      const nested=kids(oe,'OEChildren').map(children).join('');
+      const lk=listKind(oe);
+      if(lk){
+        if(!cur||cur.tag!==lk.tag||cur.cls!==lk.cls){flush();cur=lk}
+        items.push(`<li${lk.done?' class="done"':''}>${oeContent(oe,true)||'<br>'}${nested}</li>`);
+      }else{
+        flush();html+=oeContent(oe,false);
+        if(nested)html+=`<div style="margin-left:28px">${nested}</div>`;
+      }
+    }
+    flush();return html;
+  }
+  // Блоки страницы по порядку сверху вниз (OneNote хранит свободно расположенные контейнеры)
+  const pos=el=>{const p=kid(el,'Position');return p?[parseFloat(attr(p,'y'))||0,parseFloat(attr(p,'x'))||0]:[0,0]};
+  const blocks=[...page.children].filter(c=>['Outline','Image','InsertedFile','MediaFile'].includes(c.localName)||/^Ink/.test(c.localName));
+  blocks.sort((a,b)=>{const[pa,pb]=[pos(a),pos(b)];return pa[0]-pb[0]||pa[1]-pb[1]});
+  let html='',inkDone=false;
+  for(const b of blocks){
+    if(b.localName==='Outline')html+=kids(b,'OEChildren').map(children).join('');
+    else if(b.localName==='Image')html+=`<p>${img(b)}</p>`;
+    else if(b.localName==='InsertedFile')html+=file(b,'📎');
+    else if(b.localName==='MediaFile')html+=file(b,'🎵');
+    else if(!inkDone){html+=ink;inkDone=true}
+  }
+  const t=kid(page,'Title');
+  const title=t?all(t,'T').map(x=>{const d=document.createElement('div');d.innerHTML=x.textContent;return d.textContent}).join(' ').trim():'';
+  return{title:title||attr(page,'name')||'',html};
+}
+async function importOneNote(data){
+  const now=Date.now();let added=0,updated=0,same=0,errs=0,i=0;
+  for(const p of data.pages||[]){
+    i++;if(i%25===0)toast(`Импорт из OneNote: ${i} из ${data.pages.length}…`);
+    const nbTitle=[p.notebook,...(p.path||[]),p.section].filter(Boolean).join(' › ')||'OneNote';
+    const nbId='on-nb-'+onHash(nbTitle);
+    let conv;try{conv=oneNoteToHtml(p.xml)}catch(e){errs++;continue}
+    let nb=notebooks.find(b=>b.id===nbId);
+    if(!nb||nb.deleted){nb={id:nbId,name:nbTitle,created:now,updated:now};const k=notebooks.findIndex(b=>b.id===nbId);if(k<0)notebooks.push(nb);else notebooks[k]=nb;await saveNb(nb)}
+    const id='on-'+onHash(p.id||nbTitle+p.title);
+    const created=Date.parse(p.created)||now,modified=Math.max(Date.parse(p.modified)||created,created);
+    const n={id,title:conv.title||p.title||'Без названия',html:conv.html,text:htmlToText(conv.html),notebookId:nbId,tags:['onenote'],pinned:false,trashed:false,created,updated:modified};
+    const k=notes.findIndex(x=>x.id===id);
+    if(k<0){notes.push(n);added++}
+    else if(notes[k].deleted||modified>notes[k].updated){n.tags=[...new Set([...(notes[k].tags||[]),'onenote'])];n.pinned=!!notes[k].pinned;notes[k]=n;updated++}
+    else{same++;continue}
+    await put('notes',n);
+  }
+  scheduleSync();renderAll();
+  const msg=`Импорт из OneNote: новых ${added}, обновлено ${updated}`+(same?`, без изменений ${same}`:'')+(errs?`, с ошибками ${errs}`:'');
+  toast(msg);if(errs)alert(msg+'\nСтраницы с ошибками пропущены.');
 }
 
 /* ---------- Dropbox (OAuth PKCE, без сервера) ---------- */
